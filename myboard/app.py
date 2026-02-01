@@ -5,6 +5,10 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from dotenv import load_dotenv
 from datetime import datetime
 import json
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use("Agg")  # 서버에서 그래프 저장용
+
 
 # 로컬 환경에서는 .env를 읽고, Azure에서는 패스.
 if os.path.exists('.env'):
@@ -199,6 +203,64 @@ def get_result():
     cursor.close()
     conn.close()
     return render_template('fms_result.html', results=results)
+
+# breeds별 평균 egg_weight 요약표
+from psycopg2.extras import DictCursor
+
+@app.route('/fms/breeds-summary')
+def breeds_summary():
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=DictCursor)
+
+    # ✅ 품종별 요약표
+    cursor.execute("""
+        SELECT
+          breeds,
+          ROUND(AVG(egg_weight)::numeric, 1) AS avg_egg_weight,
+          MIN(egg_weight) AS min_egg_weight,
+          MAX(egg_weight) AS max_egg_weight,
+          COUNT(*) AS total
+        FROM fms.chick_info
+        GROUP BY breeds
+        ORDER BY breeds;
+    """)
+    summary = cursor.fetchall()
+
+    # ✅ 히스토그램용 전체 egg_weight 데이터
+    cursor.execute("""
+        SELECT egg_weight
+        FROM fms.chick_info
+        WHERE egg_weight IS NOT NULL;
+    """)
+    weights = [row["egg_weight"] for row in cursor.fetchall()]
+
+    cursor.close()
+    conn.close()
+
+    # ✅ static 폴더 경로 (myboard/static)
+    base_dir = os.path.dirname(__file__)
+    static_dir = os.path.join(base_dir, "static")
+    os.makedirs(static_dir, exist_ok=True)
+
+    img_filename = "egg_weight_hist.png"
+    img_path = os.path.join(static_dir, img_filename)
+
+    # ✅ 히스토그램 생성
+    plt.figure(figsize=(10, 4))
+    plt.hist(weights, bins=10, edgecolor="black")
+    plt.title("Egg Weight Histogram")
+    plt.xlabel("egg_weight")
+    plt.ylabel("count")
+    plt.tight_layout()
+    plt.savefig(img_path)
+    plt.close()
+
+    return render_template(
+        "breeds_summary.html",
+        summary=summary,
+        hist_img=img_filename
+    )
+
 
 if __name__ == '__main__':
     app.run(debug=True)

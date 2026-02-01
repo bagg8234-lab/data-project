@@ -190,11 +190,11 @@ def like_post(post_id):
     return redirect(url_for('view_post', post_id=post_id))
 
 # fms.total_result 뷰 띄우기
-@app.route('/fms/result')
+@app.route('/fms/chick')
 def get_result():
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=DictCursor)
-    cursor.execute("SELECT * FROM fms.total_result")
+    cursor.execute("SELECT * FROM fms.chick_info")
     results = cursor.fetchall()
     cursor.close()
     conn.close()
